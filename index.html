@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>순대이츠(Soondae Eats) - 전국 순대트럭 실시간 레이더</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=obu2h8emi2"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <style>
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+    :root {
+      --ce-cyan: #00AFFE;
+      --ce-blue: #0073E9;
+      --ce-navy: #0B192C;
+      --ce-red: #F43142;
+      --ce-gold: #FFB800;
+      --ce-bg: #F2F4F7;
+      --ce-text: #111111;
+      --ce-sub: #666666;
+    }
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background-color: var(--ce-bg);
+      color: var(--ce-text);
+      letter-spacing: -0.025em;
+    }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* 쿠팡이츠 시그니처 그라데이션 & 배지 */
+    .ce-cheetah-grad {
+      background: linear-gradient(92deg, #00B2FF 0%, #0066FF 100%);
+      color: #ffffff;
+    }
+    .ce-banner-grad {
+      background: linear-gradient(100deg, #00AFFE 0%, #0068FF 58%, #0047B3 100%);
+    }
+    .ce-wow-badge {
+      background: linear-gradient(90deg, #1E3A8A 0%, #0073E9 100%);
+      color: #ffffff;
+    }
+    .ce-red-soft {
+      background-color: #FFF0F1;
+      color: #F43142;
+    }
+    .ce-cyan-soft {
+      background-color: #EBF8FF;
+      color: #0073E9;
+    }
+
+    /* 쿠팡이츠 스타일 검색창 그림자 */
+    .ce-search-box {
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+      border: 1.5px solid #E5E8EB;
+    }
+    .ce-search-box:focus-within {
+      border-color: #00AFFE;
+      box-shadow: 0 3px 14px rgba(0, 175, 254, 0.18);
+    }
+
+    /* 쿠팡이츠 매장 카드 */
+    .ce-store-card {
+      background: #ffffff;
+      border-radius: 18px;
+      box-shadow: 0 2px 8px rgba(17, 17, 17, 0.04);
+      border: 1px solid #EDF0F3;
+      transition: all 0.18s ease;
+    }
+    .ce-store-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 115, 233, 0.13);
+      border-color: #00AFFE;
+    }
+
+    /* 쿠팡이츠 앱 특유의 굵은 섹션 구분선 */
+    .ce-section-divider {
+      height: 8px;
+      background-color: #F2F4F7;
+      border-top: 1px solid #E5E8EB;
+    }
+
+    /* 지도 위 쿠팡이츠 말풍선 마커 핀 */
+    .pin {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+      border: 2px solid #ffffff;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.24);
+      transform: translate(-50%, -50%);
+      transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1);
+      cursor: pointer;
+    }
+    .pin:hover {
+      transform: translate(-50%, -50%) scale(1.14);
+      z-index: 1000 !important;
+    }
+    .pin-fresh {
+      background: linear-gradient(90deg, #00AFFE 0%, #0066FF 100%);
+      color: #ffffff;
+    }
+    .pin-old {
+      background: #1F2937;
+      color: #ffffff;
+    }
+    .pin-today {
+      background: linear-gradient(90deg, #F43142 0%, #FF5A36 100%);
+      color: #ffffff;
+    }
+    .pin-report {
+      background: #ffffff;
+      color: #F43142;
+      border-color: #F43142;
+    }
+    .pin-approx {
+      opacity: 0.78;
+      border-style: dashed;
+    }
+    .cluster {
+      background: rgba(0, 175, 254, 0.22);
+      border-radius: 9999px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .cluster div {
+      background: linear-gradient(135deg, #00AFFE, #0066FF);
+      color: #ffffff;
+      font-weight: 900;
+      font-size: 12px;
+      border-radius: 9999px;
+      width: 34px;
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2.5px solid #ffffff;
+      box-shadow: 0 3px 10px rgba(0, 102, 255, 0.35);
+    }
+  </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+
+  <!-- 1. 쿠팡이츠 스타일 최상단 앱 헤더 -->
+  <header class="bg-white border-b border-[#E5E8EB] px-4 pt-2.5 pb-2.5 z-20 shrink-0">
+    <div class="max-w-[1600px] mx-auto flex flex-wrap items-center justify-between gap-3">
+
+      <!-- 좌측: 쿠팡이츠 로고 + 배달지(탐색지역) 선택 바 -->
+      <div class="flex items-center gap-3">
+        <div class="flex items-center cursor-pointer select-none" onclick="setRegion('ALL')">
+          <span class="text-[22px] font-black tracking-tighter text-[#743827]">순대</span>
+          <span class="text-[22px] font-black tracking-tighter text-[#00AFFE]">이츠</span>
+        </div>
+
+        <!-- 쿠팡이츠 상단 배달 주소 피커 스타일 -->
+        <div
+          onclick="cycleRegionQuick()"
+          title="클릭하면 권역을 순환 탐색합니다"
+          class="flex items-center gap-1.5 bg-[#F2F4F7] hover:bg-[#E5E8EB] px-3 py-1.5 rounded-full cursor-pointer transition"
+        >
+          <span class="text-[#00AFFE] text-sm">📍</span>
+          <span id="headerAddrLabel" class="text-xs font-extrabold text-[#111111]">전국 순대트럭 보기</span>
+          <span class="text-[10px] text-[#666666] font-bold">▾</span>
+        </div>
+
+        <span id="mapEngineBadge" class="hidden md:inline-flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-1 rounded-full bg-[#E8F8F0] text-[#059669]">
+          🗺️ NAVER 지도
+        </span>
+      </div>
+
+      <!-- 중앙: 쿠팡이츠 시그니처 캡슐 검색바 -->
+      <div class="flex items-center gap-2 flex-1 max-w-xl">
+        <div class="relative flex-1 ce-search-box bg-white rounded-full overflow-hidden">
+          <input
+            id="searchInput"
+            type="text"
+            placeholder="무슨 순대트럭 찾으세요? (공릉동, 팔천순대, 김치순대)"
+            class="w-full bg-transparent pl-10 pr-4 py-2 text-xs font-semibold text-[#111111] placeholder-[#8B95A1] focus:outline-none"
+          />
+          <svg class="w-4 h-4 text-[#00AFFE] absolute left-3.5 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 103.5 10.5a7.5 7.5 0 0013.15 6.15z" />
+          </svg>
+        </div>
+
+        <button
+          onclick="locateMe()"
+          id="locateBtn"
+          class="bg-[#F2F4F7] hover:bg-[#E5E8EB] text-[#111111] text-xs font-extrabold px-3.5 py-2 rounded-full transition shrink-0 flex items-center gap-1"
+        >
+          <span>🎯</span><span>내 주변</span>
+        </button>
+
+        <button
+          onclick="openReport()"
+          class="ce-cheetah-grad hover:opacity-95 text-white text-xs font-extrabold px-4 py-2 rounded-full shadow-sm transition shrink-0 flex items-center gap-1"
+        >
+          <span>⚡ 트럭 제보</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 2. 쿠팡이츠 스타일 원형 아이콘 카테고리 바 (요일 + 퀵필터 + 지역탭) -->
+  <section class="bg-white border-b border-[#E5E8EB] px-4 py-2.5 shrink-0 z-10 shadow-2xs space-y-2.5">
+    <div class="max-w-[1600px] mx-auto space-y-2">
+
+      <!-- 상단: 쿠팡이츠 원형/캡슐 요일 아이콘 리스트 -->
+      <div class="flex items-center justify-between gap-3 overflow-x-auto no-scrollbar">
+        <div class="flex items-center gap-2 shrink-0" id="dayBar">
+          <!-- JS로 쿠팡이츠 아이콘 칩 렌더링 -->
+        </div>
+
+        <!-- 우측: 쿠팡이츠 와우/치타 필터 칩 -->
+        <div class="flex items-center gap-1.5 shrink-0 border-l border-[#E5E8EB] pl-3">
+          <button data-q="fresh" class="qf px-3 py-1.5 rounded-full text-xs font-extrabold border shrink-0 transition">
+            ⚡ 치타확인(최근3개월)
+          </button>
+          <button data-q="schedule" class="qf px-3 py-1.5 rounded-full text-xs font-extrabold border shrink-0 transition">
+            📅 주간배차표 완비
+          </button>
+          <button data-q="exact" class="qf px-3 py-1.5 rounded-full text-xs font-extrabold border shrink-0 transition">
+            🎯 네이버정밀핀
+          </button>
+          <button data-q="phone" class="qf px-3 py-1.5 rounded-full text-xs font-extrabold border shrink-0 transition">
+            📞 전화예약 가능
+          </button>
+          <button data-q="kimchi" class="qf px-3 py-1.5 rounded-full text-xs font-extrabold border shrink-0 transition">
+            🌶️ 김치순대
+          </button>
+          <select id="sortSel" class="bg-[#F2F4F7] rounded-full px-3 py-1.5 text-xs font-extrabold text-[#111111] focus:outline-none shrink-0 cursor-pointer">
+            <option value="recent">최근 확인순</option>
+            <option value="sources">후기 많은순</option>
+            <option value="distance">가까운순</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 하단: 전국 권역 캡슐 탭 -->
+      <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-0.5" id="regionBar"></div>
+    </div>
+  </section>
+
+  <!-- 3. 메인 스플릿 레이아웃 (좌측: 쿠팡이츠 매장 리스트 / 우측: 네이버 지도) -->
+  <div class="flex-1 flex flex-col md:flex-row overflow-hidden">
+
+    <!-- 좌측: 쿠팡이츠 매장 피드 영역 -->
+    <aside class="w-full md:w-[490px] lg:w-[530px] bg-[#F2F4F7] border-r border-[#E5E8EB] flex flex-col h-[54%] md:h-full order-2 md:order-1 z-10">
+
+      <!-- 쿠팡이츠 상단 프로모션 배너 (치타배달 블루 배너 스타일) -->
+      <div class="ce-banner-grad text-white px-4 py-3 flex items-center justify-between shrink-0 shadow-xs">
+        <div class="flex items-center gap-2.5">
+          <span class="bg-[#FFE600] text-[#111111] text-[10px] font-black px-2 py-0.5 rounded-md tracking-tight">
+            WOW 레이더
+          </span>
+          <div>
+            <div id="todayBanner" class="text-xs sm:text-[13px] font-black leading-tight"></div>
+            <div id="dataStamp" class="text-[10px] text-white/80 font-medium mt-0.5">전국 최근 1년 블로그·주민 제보 실시간 통합</div>
+          </div>
+        </div>
+        <div class="text-right shrink-0">
+          <div class="text-[10px] text-white/80 font-bold">검색된 트럭</div>
+          <div class="text-base font-black leading-none"><span id="truckCount">0</span><span class="text-xs font-bold ml-0.5">대</span></div>
+        </div>
+      </div>
+
+      <!-- 매장 리스트 스크롤 영역 -->
+      <div id="truckList" class="flex-1 overflow-y-auto p-3.5 space-y-3"></div>
+    </aside>
+
+    <!-- 우측: 네이버 지도 영역 -->
+    <main class="flex-1 h-[46%] md:h-full relative order-1 md:order-2">
+      <div id="map" class="w-full h-full"></div>
+
+      <!-- 도메인 미등록 시 안내 배너 -->
+      <div id="naverAuthNotice" class="hidden absolute top-3 left-3 right-3 z-[600] bg-amber-50 border border-amber-300 text-amber-900 rounded-2xl px-4 py-2.5 shadow-lg text-xs font-semibold"></div>
+
+      <!-- 지도 좌하단 쿠팡이츠 스타일 범례 카드 -->
+      <div class="absolute bottom-4 left-4 z-[500] bg-white/95 backdrop-blur-xs border border-[#E5E8EB] rounded-2xl px-3.5 py-2.5 shadow-lg text-[11px] space-y-1.5">
+        <div class="font-extrabold text-[#111111] text-[10px] uppercase tracking-wider text-[#0073E9] mb-1">⚡ 순대이츠 핀 안내</div>
+        <div class="flex items-center gap-2 font-bold text-[#111111]"><span class="pin pin-today !transform-none !py-0.5 !px-2">🔥오늘</span> 오늘 오는 트럭</div>
+        <div class="flex items-center gap-2 font-bold text-[#111111]"><span class="pin pin-fresh !transform-none !py-0.5 !px-2">⚡치타</span> 최근 3개월 내 확인</div>
+        <div class="flex items-center gap-2 font-bold text-[#111111]"><span class="pin pin-old !transform-none !py-0.5 !px-2">🚚일반</span> 1년 이내 확인</div>
+        <div class="flex items-center gap-2 text-[#666666]"><span class="pin pin-old pin-approx !transform-none !py-0.5 !px-2">점선</span> 동네/시·구 중심(대략 위치)</div>
+      </div>
+    </main>
+  </div>
+
+  <!-- 4. 쿠팡이츠 스타일 매장 상세 모달 (Store Detail Sheet) -->
+  <div id="detailModal" class="fixed inset-0 bg-black/55 backdrop-blur-2xs hidden items-center justify-center z-[1000] p-3">
+    <div class="bg-white rounded-3xl max-w-lg w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden border border-[#E5E8EB]">
+
+      <!-- 상단 쿠팡이츠 블루 히어로 커버 -->
+      <div class="ce-banner-grad pt-5 pb-14 px-5 relative shrink-0 text-white">
+        <button
+          onclick="closeModal('detailModal')"
+          class="absolute top-4 right-4 w-8 h-8 rounded-full bg-black/25 hover:bg-black/40 text-white font-bold flex items-center justify-center transition"
+        >
+          ✕
+        </button>
+        <div class="flex items-center gap-1.5 text-xs font-extrabold opacity-95">
+          <span class="bg-[#FFE600] text-[#111111] text-[10px] font-black px-2 py-0.5 rounded">WOW</span>
+          <span id="mRegion"></span>
+        </div>
+      </div>
+
+      <!-- 히어로에 겹쳐 올라오는 쿠팡이츠 시그니처 화이트 매장 헤더 카드 -->
+      <div class="px-4 -mt-10 relative z-10 shrink-0">
+        <div class="bg-white rounded-2xl p-4 shadow-lg border border-[#EDF0F3] text-center">
+          <div id="mBadges" class="flex items-center justify-center gap-1.5 flex-wrap mb-1.5"></div>
+          <h2 id="mTitle" class="text-xl font-black text-[#111111] leading-snug"></h2>
+          <div id="mMeta" class="text-xs font-semibold text-[#666666] mt-1"></div>
+
+          <!-- 쿠팡이츠 배달시간/포장안내 스타일 2단 그리드 -->
+          <div class="mt-3.5 pt-3 border-t border-[#F2F4F7] grid grid-cols-2 gap-2 text-left text-xs">
+            <div class="bg-[#F8FAFC] rounded-xl p-2.5 border border-[#EDF0F3]">
+              <div class="text-[10px] font-extrabold text-[#666666]">⏰ 영업시간 · 포장</div>
+              <div id="mHours" class="font-black text-[#111111] mt-0.5 truncate"></div>
+            </div>
+            <div class="bg-[#F8FAFC] rounded-xl p-2.5 border border-[#EDF0F3]">
+              <div class="text-[10px] font-extrabold text-[#666666]">📞 사장님 연락처</div>
+              <div id="mPhone" class="font-black text-[#0073E9] mt-0.5 truncate"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 상세 모달 스크롤 본문 -->
+      <div class="overflow-y-auto flex-1 text-xs mt-3">
+
+        <!-- 실시간 목격 인증 배너 -->
+        <div class="px-4 pb-3.5">
+          <div class="bg-[#EBF8FF] border border-[#BAE6FD] rounded-2xl p-3.5 flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2.5">
+              <span class="text-2xl">🙌</span>
+              <div>
+                <div class="font-black text-[#0047B3]">오늘 이 순대트럭 보셨나요?</div>
+                <div class="text-[11px] text-[#0369A1]">출석 체크로 동네 이웃의 헛걸음을 막아주세요!</div>
+              </div>
+            </div>
+            <button
+              id="checkinBtn"
+              onclick="checkin()"
+              class="ce-cheetah-grad hover:opacity-95 text-white font-extrabold px-3.5 py-2 rounded-xl shrink-0 shadow-xs"
+            ></button>
+          </div>
+        </div>
+
+        <div class="ce-section-divider"></div>
+
+        <!-- 요일별 출몰 위치 섹션 -->
+        <div class="p-4 bg-white">
+          <div class="flex items-center justify-between mb-2.5">
+            <h3 class="font-black text-sm text-[#111111] flex items-center gap-1.5">
+              <span>📅</span> 주간 출몰 배차표
+            </h3>
+            <span class="text-[11px] font-extrabold text-[#00AFFE]">요일별 정차 위치</span>
+          </div>
+          <div id="mSchedule" class="divide-y divide-[#F2F4F7]"></div>
+          <div id="mAddr" class="mt-2.5 pt-2.5 border-t border-[#F2F4F7] text-[11px] text-[#666666]"></div>
+        </div>
+
+        <div class="ce-section-divider"></div>
+
+        <!-- 쿠팡이츠 메뉴판 스타일 섹션 -->
+        <div class="p-4 bg-white space-y-2.5">
+          <div class="flex items-center justify-between">
+            <h3 class="font-black text-sm text-[#111111] flex items-center gap-1.5">
+              <span>🍢</span> 대표 메뉴 · 가격 · 결제수단
+            </h3>
+            <div id="mPays" class="flex flex-wrap gap-1"></div>
+          </div>
+          <div id="mMenus" class="divide-y divide-[#F2F4F7]"></div>
+          <div id="mPrices" class="flex flex-wrap gap-1.5 pt-1"></div>
+          <p class="text-[10px] text-[#8B95A1]">※ 블로그 후기에서 자동 추출된 메뉴/가격입니다. 정확한 금액은 아래 출처 원문 현수막 사진을 참고해 주세요.</p>
+        </div>
+
+        <div class="ce-section-divider"></div>
+
+        <!-- 블로그 출처 원문 리스트 -->
+        <div class="p-4 bg-white">
+          <h3 class="font-black text-sm text-[#111111] mb-2.5 flex items-center justify-between">
+            <span>🔗 실제 방문자 블로그 후기 & 현수막 사진</span>
+            <span id="mSrcCnt" class="text-xs font-extrabold text-[#00AFFE]"></span>
+          </h3>
+          <div id="mSources" class="space-y-2"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. 제보 모달 (쿠팡이츠 스타일) -->
+  <div id="reportModal" class="fixed inset-0 bg-black/55 hidden items-center justify-center z-[1000] p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-[#E5E8EB]">
+      <div class="flex items-center justify-between mb-1.5">
+        <div class="flex items-center gap-1.5">
+          <span class="ce-cheetah-grad text-[10px] font-black px-2 py-0.5 rounded-md">⚡ 주민제보</span>
+          <h2 class="text-base font-black text-[#111111]">우리 동네 순대트럭 등록</h2>
+        </div>
+        <button onclick="closeModal('reportModal')" class="text-gray-400 hover:text-gray-700 text-lg font-bold">✕</button>
+      </div>
+      <p class="text-xs text-[#666666] mb-4">
+        📍 <b>현재 지도 가운데 위치</b>로 등록됩니다. 지도를 트럭 위치로 옮긴 뒤 등록해 주세요!
+      </p>
+      <form onsubmit="submitReport(event)" class="space-y-3 text-xs">
+        <input id="repName" required maxlength="40" placeholder="트럭 이름 / 특징 (예: 잠실 파크리오 정문 찹쌀순대)"
+          class="w-full bg-[#F2F4F7] border border-[#E5E8EB] rounded-xl px-3.5 py-2.5 font-semibold focus:outline-none focus:border-[#00AFFE] focus:bg-white" />
+        <input id="repPlace" required maxlength="40" placeholder="정차 위치 설명 (예: 파크리오 A상가 국민은행 앞)"
+          class="w-full bg-[#F2F4F7] border border-[#E5E8EB] rounded-xl px-3.5 py-2.5 font-semibold focus:outline-none focus:border-[#00AFFE] focus:bg-white" />
+        <div>
+          <div class="font-extrabold text-[#111111] mb-1.5">출몰 요일 선택</div>
+          <div id="repDays" class="flex gap-1.5"></div>
+        </div>
+        <button type="submit" class="w-full ce-cheetah-grad hover:opacity-95 text-white font-black py-3 rounded-xl shadow-md">
+          ⚡ 순대이츠 지도에 등록하기
+        </button>
+        <button type="button" onclick="clearReports()" class="w-full text-[11px] text-[#8B95A1] hover:text-[#F43142] font-semibold">
+          이 브라우저에 저장된 내 제보 초기화
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const DAYS = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일'];
+    const DAY_ICONS = {
+      'ALL': '🚚',
+      '월요일': '🌙',
+      '화요일': '🔥',
+      '수요일': '🍢',
+      '목요일': '🌶️',
+      '금요일': '🍗',
+      '토요일': '🎉',
+      '일요일': '🏡'
+    };
+    const TODAY = DAYS[(new Date().getDay() + 6) % 7];
+    const REGIONS = ['ALL', '서울', '경기', '인천', '대전/세종', '충청', '전북', '광주/전남', '대구/경북', '부산/울산/경남', '강원', '제주'];
+    const REGION_VIEW = {
+      'ALL': [36.35, 127.75, 7], '서울': [37.56, 126.98, 11], '경기': [37.40, 127.05, 9], '인천': [37.47, 126.68, 11],
+      '대전/세종': [36.40, 127.35, 10], '충청': [36.72, 127.30, 9], '전북': [35.85, 127.0, 10], '광주/전남': [35.0, 127.0, 9],
+      '대구/경북': [36.0, 128.7, 9], '부산/울산/경남': [35.3, 128.9, 9], '강원': [37.75, 128.3, 8], '제주': [33.38, 126.55, 10],
+    };
+    const PAGE = 120;
+
+    const state = { trucks: [], day: 'ALL', region: 'ALL', q: '', quick: new Set(), sort: 'recent', me: null, shown: PAGE, selected: null };
+    let map, cluster, meMarker;
+    let mapEngine = 'naver';
+    let naverMarkers = [];
+    let currentFilteredList = [];
+
+    const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const safeUrl = u => /^https:\/\/(m\.)?blog\.naver\.com\//.test(u) ? u : '#';
+    const short = d => d.slice(0, 1);
+
+    function seenLabel(t) {
+      if (t.is_report) return '방금 제보됨';
+      const d = t.days_since;
+      if (d == null) return '최근 1년 내';
+      if (d <= 0) return '오늘 인증됨';
+      if (d < 30) return `${d}일 전 확인`;
+      return `${Math.round(d / 30)}개월 전 확인`;
+    }
+    const PREC = {
+      exact: ['🎯 네이버지도 정밀핀', 'bg-[#E8F8F0] text-[#059669]'],
+      dong: ['📍 동네 중심핀', 'bg-amber-50 text-amber-700'],
+      area: ['📍 시·구 중심핀', 'bg-gray-100 text-gray-500'],
+      report: ['📢 주민 직접제보', 'bg-red-50 text-[#F43142]'],
+    };
+    function distKm(a, b) {
+      const R = 6371, r = x => x * Math.PI / 180;
+      const h = Math.sin(r(b[0] - a[0]) / 2) ** 2 + Math.cos(r(a[0])) * Math.cos(r(b[0])) * Math.sin(r(b[1] - a[1]) / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(h));
+    }
+    const todaySpot = t => t.weekly_schedule?.[TODAY];
+    const comesToday = t => (t.days || []).includes(TODAY) && !(todaySpot(t) || '').includes('휴무');
+
+    // 트럭별 쿠팡이츠 스타일 대표 썸네일 아이콘/컬러 결정
+    function getTruckVisual(t) {
+      const menus = (t.menus || []).join(' ');
+      if (menus.includes('통닭') || menus.includes('전기구이')) {
+        return { emoji: '🍗', sub: '통닭·순대', bg: 'from-[#FFF3E0] to-[#FFE0B2]', border: 'border-[#FFCC80]' };
+      }
+      if (menus.includes('김치')) {
+        return { emoji: '🌶️', sub: '김치·찰순대', bg: 'from-[#FFEBEE] to-[#FFCDD2]', border: 'border-[#EF9A9A]' };
+      }
+      if (menus.includes('곱창')) {
+        return { emoji: '🥘', sub: '야채곱창·순대', bg: 'from-[#FBE9E7] to-[#FFCCBC]', border: 'border-[#FFAB91]' };
+      }
+      if (comesToday(t)) {
+        return { emoji: '🚚', sub: '오늘출몰', bg: 'from-[#E3F2FD] to-[#BBDEFB]', border: 'border-[#90CAF9]' };
+      }
+      return { emoji: '🍢', sub: '찰순대·모듬', bg: 'from-[#F0F9FF] to-[#E0F2FE]', border: 'border-[#BAE6FD]' };
+    }
+
+    // 네이버 지도 인증 실패 시 자동 폴백
+    window.navermap_authFailure = function () {
+      const notice = document.getElementById('naverAuthNotice');
+      notice.classList.remove('hidden');
+      notice.innerHTML = `⚠️ 네이버 클라우드 콘솔 <b>[Application > 변경 > Web 서비스 URL]</b>에 <code>${esc(window.location.origin)}</code>을 등록해 주세요. (현재 백업 지도로 표시 중)`;
+      const badge = document.getElementById('mapEngineBadge');
+      badge.textContent = '⚠️ 도메인 등록 대기중';
+      badge.className = 'hidden md:inline-flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700';
+      switchToLeafletFallback();
+    };
+
+    function switchToLeafletFallback() {
+      if (mapEngine === 'leaflet') return;
+      mapEngine = 'leaflet';
+      const el = document.getElementById('map');
+      el.innerHTML = '';
+      map = L.map('map', { zoomControl: false }).setView(REGION_VIEW.ALL.slice(0, 2), 7);
+      L.control.zoom({ position: 'bottomright' }).addTo(map);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 19,
+      }).addTo(map);
+      cluster = L.markerClusterGroup({
+        showCoverageOnHover: false, maxClusterRadius: 45,
+        iconCreateFunction: c => L.divIcon({ html: `<div>${c.getChildCount()}</div>`, className: 'cluster', iconSize: [44, 44] }),
+      });
+      map.addLayer(cluster);
+      renderMarkers(currentFilteredList);
+    }
+
+    function initMap() {
+      if (window.naver && window.naver.maps) {
+        mapEngine = 'naver';
+        map = new naver.maps.Map('map', {
+          center: new naver.maps.LatLng(REGION_VIEW.ALL[0], REGION_VIEW.ALL[1]),
+          zoom: REGION_VIEW.ALL[2],
+          zoomControl: true,
+          zoomControlOptions: {
+            position: naver.maps.Position.BOTTOM_RIGHT,
+            style: naver.maps.ZoomControlStyle.SMALL
+          }
+        });
+        naver.maps.Event.addListener(map, 'zoom_changed', () => {
+          renderMarkers(currentFilteredList);
+        });
+      } else {
+        switchToLeafletFallback();
+      }
+    }
+
+    function moveMap(lat, lng, zoom) {
+      if (mapEngine === 'naver' && map) {
+        map.morph(new naver.maps.LatLng(lat, lng), zoom, { duration: 500 });
+      } else if (map) {
+        map.flyTo([lat, lng], zoom, { duration: 0.6 });
+      }
+    }
+
+    function getMapZoom() { return map ? map.getZoom() : 7; }
+
+    function getMapCenter() {
+      if (mapEngine === 'naver' && map) {
+        const c = map.getCenter();
+        return { lat: c.lat(), lng: c.lng() };
+      }
+      return map.getCenter();
+    }
+
+    // 쿠팡이츠 스타일 요일 카테고리 바
+    function renderDayBar() {
+      const bar = document.getElementById('dayBar');
+      const opts = [['ALL', '전체요일'], ...DAYS.map(d => [d, d === TODAY ? `오늘(${short(d)})` : d])];
+      bar.innerHTML = opts.map(([v, label]) => {
+        const on = state.day === v;
+        const isToday = v === TODAY;
+        return `
+          <button
+            onclick="setDay('${v}')"
+            class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-extrabold shrink-0 transition ${
+              on
+                ? 'bg-[#111111] text-white shadow-xs'
+                : isToday
+                ? 'ce-red-soft border border-[#FFCDD2] hover:bg-red-100'
+                : 'bg-[#F2F4F7] text-[#333D4B] hover:bg-[#E5E8EB]'
+            }"
+          >
+            <span>${ isToday ? '🔥' : DAY_ICONS[v] }</span>
+            <span>${label}</span>
+          </button>
+        `;
+      }).join('');
+    }
+
+    function renderRegionBar() {
+      const cnt = { ALL: state.trucks.length };
+      state.trucks.forEach(t => cnt[t.region] = (cnt[t.region] || 0) + 1);
+      document.getElementById('regionBar').innerHTML = REGIONS.filter(r => r === 'ALL' || cnt[r]).map(r => {
+        const on = state.region === r;
+        return `
+          <button
+            onclick="setRegion('${r}')"
+            class="px-3 py-1 rounded-full text-xs font-extrabold shrink-0 transition ${
+              on
+                ? 'bg-[#00AFFE] text-white shadow-2xs'
+                : 'bg-white border border-[#E5E8EB] text-[#4E5968] hover:border-[#00AFFE] hover:text-[#0073E9]'
+            }"
+          >
+            ${r === 'ALL' ? '전국' : r} <span class="${on ? 'text-white' : 'text-[#00AFFE]'} ml-0.5">${cnt[r] || 0}</span>
+          </button>
+        `;
+      }).join('');
+    }
+
+    function renderQuick() {
+      document.querySelectorAll('.qf').forEach(b => {
+        const on = state.quick.has(b.dataset.q);
+        b.className = `qf px-3 py-1.5 rounded-full text-xs font-extrabold border shrink-0 transition ${
+          on
+            ? 'border-[#00AFFE] bg-[#EBF8FF] text-[#0073E9]'
+            : 'border-[#E5E8EB] bg-white text-[#4E5968] hover:border-[#00AFFE]'
+        }`;
+      });
+    }
+
+    function filtered() {
+      const q = state.q.trim().toLowerCase();
+      let list = state.trucks.filter(t => {
+        if (state.region !== 'ALL' && t.region !== state.region) return false;
+        if (state.day !== 'ALL' && !(t.days || []).includes(state.day)) return false;
+        if (state.quick.has('fresh') && t.freshness_level !== 'high') return false;
+        if (state.quick.has('schedule') && !Object.keys(t.weekly_schedule || {}).length) return false;
+        if (state.quick.has('exact') && t.coord_precision !== 'exact') return false;
+        if (state.quick.has('phone') && !(t.phones || []).length) return false;
+        if (state.quick.has('kimchi') && !(t.menus || []).some(m => m.includes('김치'))) return false;
+        if (q) {
+          const hay = [t.truck_name, t.region, t.sub_region, t.exact_address, ...(t.locations || []), ...(t.menus || []),
+            ...Object.values(t.weekly_schedule || {}), ...(t.sources || []).map(s => s.title)].join(' ').toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      });
+      if (state.me) list.forEach(t => t._dist = distKm(state.me, [t.lat, t.lng]));
+      const byRecent = (a, b) => (b.is_report - a.is_report) || ((a.days_since ?? 9999) - (b.days_since ?? 9999));
+      if (state.sort === 'distance' && state.me) list.sort((a, b) => a._dist - b._dist);
+      else if (state.sort === 'sources') list.sort((a, b) => (b.source_count || 0) - (a.source_count || 0) || byRecent(a, b));
+      else list.sort(byRecent);
+      return list;
+    }
+
+    function apply(resetPage = true) {
+      if (resetPage) state.shown = PAGE;
+      const list = filtered();
+      currentFilteredList = list;
+      document.getElementById('truckCount').textContent = list.length;
+      const todayN = list.filter(comesToday).length;
+      document.getElementById('todayBanner').textContent = `오늘(${TODAY}) 출몰 예정 순대트럭 ${todayN}대`;
+      renderList(list);
+      renderMarkers(list);
+    }
+
+    // 쿠팡이츠 스타일 매장 카드 (좌측 썸네일 박스 + 우측 매장 상세)
+    function card(t) {
+      const sched = Object.entries(t.weekly_schedule || {});
+      const chips = sched.length
+        ? sched.slice(0, 5).map(([d, v]) => `
+            <span class="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-bold ${
+              d === TODAY
+                ? 'bg-[#F43142] text-white'
+                : 'ce-cyan-soft'
+            }">
+              <b>${short(d)}</b><span>${esc(v.slice(0, 11))}</span>
+            </span>`).join('')
+        : (t.days || []).map(d => `
+            <span class="rounded-md px-2 py-0.5 text-[11px] font-bold ${
+              d === TODAY ? 'bg-[#F43142] text-white' : 'bg-[#F2F4F7] text-[#4E5968]'
+            }">${d}</span>`).join('')
+          || `<span class="text-[11px] text-[#8B95A1]">상세 요일표는 블로그 현수막 사진 참고</span>`;
+
+      const spot = todaySpot(t);
+      const todayBox = comesToday(t)
+        ? `<div class="mt-2 ce-red-soft rounded-xl px-3 py-1.5 text-[11px] font-extrabold flex items-center justify-between">
+             <span>🔥 오늘(${short(TODAY)}) 출몰 트럭</span>
+             <span class="truncate max-w-[65%]">${spot ? esc(spot) : '정상 출몰 요일'}</span>
+           </div>` : '';
+
+      const [pl, pc] = PREC[t.coord_precision] || PREC.area;
+      const dist = state.me && t._dist != null
+        ? `<span class="text-[#0073E9] font-extrabold">${t._dist < 1 ? Math.round(t._dist * 1000) + 'm' : t._dist.toFixed(1) + 'km'}</span> · `
+        : '';
+      const vis = getTruckVisual(t);
+
+      return `
+        <article onclick="openDetail('${t.id}')" class="ce-store-card p-3.5 cursor-pointer group">
+          <div class="flex gap-3.5">
+            <!-- 좌측 쿠팡이츠 스타일 정사각 썸네일 카드 -->
+            <div class="w-20 h-20 rounded-2xl bg-gradient-to-br ${vis.bg} border ${vis.border} flex flex-col items-center justify-center shrink-0 relative overflow-hidden">
+              <span class="text-3xl group-hover:scale-110 transition-transform">${vis.emoji}</span>
+              <span class="text-[10px] font-black text-[#333D4B] mt-0.5">${vis.sub}</span>
+              ${t.freshness_level === 'high'
+                ? `<span class="absolute top-0 left-0 right-0 ce-cheetah-grad text-[9px] font-black text-center py-0.5">⚡치타확인</span>`
+                : ''
+              }
+            </div>
+
+            <!-- 우측 매장 핵심 정보 -->
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between gap-1 mb-1">
+                <div class="flex items-center gap-1 flex-wrap">
+                  <span class="text-[10px] font-extrabold px-2 py-0.5 rounded bg-[#F2F4F7] text-[#333D4B]">
+                    ${esc(t.region)} · ${esc(t.sub_region)}
+                  </span>
+                  <span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded ${pc}">${pl}</span>
+                </div>
+                <span class="text-[11px] font-bold text-[#0073E9] shrink-0">${seenLabel(t)}</span>
+              </div>
+
+              <!-- 매장 타이틀 -->
+              <h3 class="text-[16px] font-black text-[#111111] group-hover:text-[#0073E9] transition truncate">
+                ${esc(t.truck_name)}
+              </h3>
+
+              <!-- 쿠팡이츠 별점/리뷰 라인 스타일 메타 정보 -->
+              <div class="flex items-center gap-1.5 text-[11px] text-[#666666] font-semibold mt-0.5">
+                <span class="text-[#FFB800] font-black">★</span>
+                <span class="text-[#111111] font-extrabold">후기·제보 ${t.source_count || 1}건</span>
+                <span>·</span>
+                <span>${dist}무료포장</span>
+                ${(t.phones || []).length ? `<span>·</span><span class="text-[#059669] font-extrabold">📞전화가능</span>` : ''}
+              </div>
+
+              <!-- 요일별 스케줄 칩 -->
+              <div class="mt-2 flex flex-wrap gap-1">${chips}</div>
+            </div>
+          </div>
+
+          ${todayBox}
+
+          <!-- 하단 주소 및 대표 메뉴 바 -->
+          <div class="mt-2.5 pt-2 border-t border-[#F2F4F7] flex items-center justify-between text-[11px]">
+            <span class="text-[#4E5968] font-semibold truncate max-w-[64%]">
+              📍 ${esc(t.exact_address || (t.locations || [])[0] || t.sub_region)}
+            </span>
+            <span class="font-extrabold text-[#F43142] ce-red-soft px-2 py-0.5 rounded-md truncate max-w-[34%]">
+              🍢 ${esc((t.menus || []).slice(0, 2).join(' · ') || '찰순대·모듬')}
+            </span>
+          </div>
+        </article>`;
+    }
+
+    function renderList(list) {
+      const el = document.getElementById('truckList');
+      if (!list.length) {
+        el.innerHTML = `<div class="bg-white rounded-2xl p-10 text-center text-xs text-[#8B95A1] border border-[#E5E8EB]">
+          <div class="text-3xl mb-2">🚚💨</div>
+          <div class="font-black text-[#111111] text-sm mb-1">조건에 맞는 순대트럭이 없어요</div>
+          필터를 해제하거나 다른 요일·지역을 선택해 보세요!
+        </div>`;
+        return;
+      }
+      el.innerHTML = list.slice(0, state.shown).map(card).join('') + (list.length > state.shown
+        ? `<button onclick="state.shown += ${PAGE}; apply(false)" class="w-full bg-white border border-[#E5E8EB] rounded-2xl py-3 text-xs font-extrabold text-[#111111] hover:border-[#00AFFE]">
+             트럭 더 보기 (${list.length - state.shown}대 남음)
+           </button>` : '');
+    }
+
+    function renderMarkers(list) {
+      if (mapEngine === 'naver' && window.naver && window.naver.maps) {
+        naverMarkers.forEach(m => m.setMap(null));
+        naverMarkers = [];
+        const zoom = getMapZoom();
+
+        if (zoom <= 11 && list.length > 60) {
+          const step = zoom <= 8 ? 0.32 : zoom === 9 ? 0.16 : zoom === 10 ? 0.08 : 0.04;
+          const buckets = new Map();
+          list.forEach(t => {
+            const key = `${Math.round(t.lat / step)}_${Math.round(t.lng / step)}`;
+            if (!buckets.has(key)) buckets.set(key, []);
+            buckets.get(key).push(t);
+          });
+          buckets.forEach(group => {
+            if (group.length === 1) {
+              naverMarkers.push(createNaverPin(group[0]));
+            } else {
+              const avgLat = group.reduce((s, x) => s + x.lat, 0) / group.length;
+              const avgLng = group.reduce((s, x) => s + x.lng, 0) / group.length;
+              const m = new naver.maps.Marker({
+                position: new naver.maps.LatLng(avgLat, avgLng),
+                map: map,
+                icon: {
+                  content: `<div class="cluster" style="width:44px;height:44px;transform:translate(-50%,-50%);"><div>${group.length}</div></div>`,
+                  size: new naver.maps.Size(44, 44),
+                  anchor: new naver.maps.Point(0, 0)
+                }
+              });
+              naver.maps.Event.addListener(m, 'click', () => {
+                moveMap(avgLat, avgLng, Math.min(zoom + 2, 14));
+              });
+              naverMarkers.push(m);
+            }
+          });
+        } else {
+          list.forEach(t => naverMarkers.push(createNaverPin(t)));
+        }
+        return;
+      }
+
+      if (!cluster) return;
+      cluster.clearLayers();
+      cluster.addLayers(list.map(t => {
+        const cls = t.is_report ? 'pin-report' : comesToday(t) ? 'pin-today' : t.freshness_level === 'high' ? 'pin-fresh' : 'pin-old';
+        const approx = t.coord_precision === 'area' || t.coord_precision === 'dong' ? 'pin-approx' : '';
+        const label = esc((t.brand || t.sub_region.split(' ').pop() || '').slice(0, 8));
+        const icon = L.divIcon({ className: '', html: `<div class="pin ${cls} ${approx}">${comesToday(t) ? '🔥' : t.is_report ? '📢' : '🚚'}${label}</div>`, iconSize: [0, 0] });
+        return L.marker([t.lat, t.lng], { icon }).on('click', () => openDetail(t.id));
+      }));
+    }
+
+    function createNaverPin(t) {
+      const cls = t.is_report ? 'pin-report' : comesToday(t) ? 'pin-today' : t.freshness_level === 'high' ? 'pin-fresh' : 'pin-old';
+      const approx = t.coord_precision === 'area' || t.coord_precision === 'dong' ? 'pin-approx' : '';
+      const label = esc((t.brand || t.sub_region.split(' ').pop() || '').slice(0, 8));
+      const m = new naver.maps.Marker({
+        position: new naver.maps.LatLng(t.lat, t.lng),
+        map: map,
+        icon: {
+          content: `<div class="pin ${cls} ${approx}">${comesToday(t) ? '🔥' : t.is_report ? '📢' : '🚚'}${label}</div>`,
+          anchor: new naver.maps.Point(0, 0)
+        }
+      });
+      naver.maps.Event.addListener(m, 'click', () => openDetail(t.id));
+      return m;
+    }
+
+    function openDetail(id) {
+      const t = state.trucks.find(x => x.id === id);
+      if (!t) return;
+      state.selected = t;
+      moveMap(t.lat, t.lng, Math.max(getMapZoom(), 15));
+      const [pl, pc] = PREC[t.coord_precision] || PREC.area;
+      document.getElementById('mRegion').textContent = `${t.region} · ${t.sub_region}`;
+      document.getElementById('mBadges').innerHTML =
+        (t.freshness_level === 'high' ? '<span class="ce-cheetah-grad text-[10px] font-black px-2.5 py-0.5 rounded-full">⚡ 치타확인 (최근 3개월)</span>' : '') +
+        `<span class="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full ${pc}">${pl}</span>`;
+      document.getElementById('mTitle').textContent = t.truck_name;
+      document.getElementById('mMeta').innerHTML = `★ 블로그·주민 후기 <b class="text-[#111111]">${t.source_count || 1}건</b> · ${seenLabel(t)}${t.last_seen ? ` (${esc(t.last_seen)})` : ''}`;
+      document.getElementById('mHours').textContent = t.hours || '오후 출몰 (원문 참고)';
+      document.getElementById('mPhone').innerHTML = (t.phones || []).length
+        ? t.phones.map(p => `<a href="tel:${esc(p)}" onclick="event.stopPropagation()" class="hover:underline">${esc(p)}</a>`).join(', ')
+        : '현장 방문 / 현수막 참고';
+
+      const sched = t.weekly_schedule || {};
+      document.getElementById('mSchedule').innerHTML = Object.keys(sched).length
+        ? DAYS.filter(d => sched[d]).map(d => `
+            <div class="flex items-center justify-between py-2.5 ${d === TODAY ? 'ce-red-soft -mx-2 px-2.5 rounded-xl' : ''}">
+              <span class="font-black w-20 shrink-0 ${d === TODAY ? 'text-[#F43142]' : 'text-[#0073E9]'}">${d}${d === TODAY ? ' 🔥' : ''}</span>
+              <span class="font-bold text-[#111111] text-right">${esc(sched[d])}</span>
+            </div>`).join('')
+        : `<div class="py-1 text-[#4E5968] space-y-1.5">
+             <div><b class="text-[#0073E9]">포착된 출몰 요일:</b> ${(t.days || []).join(', ') || '미상'}</div>
+             <div><b class="text-[#0073E9]">포착된 정차 장소:</b> ${esc((t.locations || []).join(', ') || '미상')}</div>
+             <div class="text-[11px] text-[#8B95A1]">※ 트럭 현수막 사진에 전체 요일표가 찍혀 있는 경우가 많습니다. 아래 블로그 원문에서 확인해 보세요!</div>
+           </div>`;
+
+      document.getElementById('mAddr').innerHTML = t.exact_address
+        ? `📍 네이버 지도 등록 주소: <b class="text-[#111111]">${esc(t.exact_address)}</b>`
+        : `📍 현재 핀은 <b>${esc(pl)}</b> 기준입니다. 상세 위치는 요일표와 블로그 후기를 확인하세요.`;
+
+      // 쿠팡이츠 스타일 메뉴판 리스트
+      const menus = (t.menus && t.menus.length) ? t.menus : ['찰순대', '모듬순대'];
+      document.getElementById('mMenus').innerHTML = menus.map((m, idx) => `
+        <div class="py-2.5 flex items-center justify-between gap-3">
+          <div>
+            <div class="flex items-center gap-1.5">
+              ${idx === 0 ? `<span class="ce-red-soft text-[10px] font-black px-1.5 py-0.5 rounded">인기</span>` : ''}
+              <span class="font-black text-[#111111] text-xs">${esc(m)}</span>
+            </div>
+            <p class="text-[11px] text-[#8B95A1] mt-0.5">따끈하게 바로 썰어주는 즉석 ${esc(m)} 포장</p>
+          </div>
+          <div class="w-11 h-11 rounded-xl bg-[#F2F4F7] flex items-center justify-center text-lg shrink-0">🍢</div>
+        </div>
+      `).join('');
+
+      const tag = (arr, cls, pre) => arr.map(x => `<span class="px-2.5 py-1 rounded-lg font-extrabold ${cls}">${pre} ${esc(x)}</span>`).join('');
+      document.getElementById('mPrices').innerHTML = (t.prices || []).length
+        ? tag(t.prices, 'bg-amber-50 text-amber-800', '💰')
+        : '';
+      document.getElementById('mPays').innerHTML = tag((t.payments && t.payments.length) ? t.payments : ['현금', '계좌이체'], 'bg-[#F2F4F7] text-[#333D4B] text-[10px]', '💳');
+
+      const srcs = t.sources || [];
+      document.getElementById('mSrcCnt').textContent = srcs.length ? `총 ${t.source_count}건` : '';
+      document.getElementById('mSources').innerHTML = srcs.length
+        ? srcs.map(s => `<a href="${safeUrl(s.url)}" target="_blank" rel="noopener noreferrer"
+            class="flex items-center justify-between gap-2 bg-[#F8FAFC] hover:bg-[#EBF8FF] border border-[#EDF0F3] hover:border-[#00AFFE] rounded-xl px-3.5 py-2.5 transition">
+            <span class="truncate font-bold text-[#111111]">📝 ${esc(s.title)}</span>
+            <span class="text-[10px] font-extrabold text-[#0073E9] shrink-0">${esc(s.posted || '')} 보기 ↗</span></a>`).join('')
+        : '<span class="text-[#8B95A1]">주민 직접 제보 (블로그 원문 없음)</span>';
+
+      renderCheckin();
+      showModal('detailModal');
+    }
+
+    const ckKey = () => `soondae_checkin_${state.selected.id}_${new Date().toISOString().slice(0, 10)}`;
+    function renderCheckin() {
+      const done = localStorage.getItem(ckKey());
+      const b = document.getElementById('checkinBtn');
+      b.textContent = done ? '✔ 오늘 목격 인증됨' : '오늘 왔어요 👍';
+      b.disabled = !!done;
+      b.classList.toggle('opacity-60', !!done);
+    }
+    function checkin() { localStorage.setItem(ckKey(), '1'); renderCheckin(); }
+
+    const loadReports = () => JSON.parse(localStorage.getItem('soondae_reports') || '[]');
+    function openReport() {
+      document.getElementById('repDays').innerHTML = DAYS.map(d =>
+        `<label class="flex-1"><input type="checkbox" value="${d}" class="peer hidden" ${d === TODAY ? 'checked' : ''}/>
+          <span class="block text-center py-2 rounded-xl bg-[#F2F4F7] font-extrabold cursor-pointer peer-checked:bg-[#00AFFE] peer-checked:text-white">${short(d)}</span></label>`).join('');
+      showModal('reportModal');
+    }
+    function submitReport(e) {
+      e.preventDefault();
+      const days = [...document.querySelectorAll('#repDays input:checked')].map(i => i.value);
+      if (!days.length) return alert('출몰 요일을 하나 이상 선택해 주세요!');
+      const c = getMapCenter();
+      const place = document.getElementById('repPlace').value.trim();
+      const r = {
+        id: 'rep-' + Date.now(), is_report: true, truck_name: document.getElementById('repName').value.trim(),
+        region: nearestRegion(c.lat, c.lng), sub_region: place, last_seen: new Date().toISOString().slice(0, 10), days_since: 0,
+        freshness_level: 'high', days, weekly_schedule: Object.fromEntries(days.map(d => [d, place])), locations: [place],
+        exact_address: '', coord_precision: 'report', lat: c.lat, lng: c.lng, phones: [], hours: '', menus: ['찰순대', '모듬순대'], prices: [],
+        payments: ['현금', '계좌이체'], source_count: 1, sources: [],
+      };
+      localStorage.setItem('soondae_reports', JSON.stringify([...loadReports(), r]));
+      state.trucks.unshift(r);
+      closeModal('reportModal');
+      e.target.reset();
+      renderRegionBar(); apply(); openDetail(r.id);
+    }
+    function clearReports() {
+      if (!confirm('이 브라우저에 저장된 내 제보를 모두 삭제할까요?')) return;
+      localStorage.removeItem('soondae_reports');
+      state.trucks = state.trucks.filter(t => !t.is_report);
+      closeModal('reportModal'); renderRegionBar(); apply();
+    }
+    function nearestRegion(lat, lng) {
+      let best = '서울', bd = 1e9;
+      for (const [r, v] of Object.entries(REGION_VIEW)) {
+        if (r === 'ALL') continue;
+        const d = distKm([lat, lng], v);
+        if (d < bd) { bd = d; best = r; }
+      }
+      return best;
+    }
+
+    function locateMe() {
+      if (!navigator.geolocation) return alert('이 브라우저는 위치 기능을 지원하지 않습니다.');
+      const btn = document.getElementById('locateBtn');
+      btn.innerHTML = '<span>⏳</span><span>탐색중..</span>';
+      navigator.geolocation.getCurrentPosition(pos => {
+        state.me = [pos.coords.latitude, pos.coords.longitude];
+        if (mapEngine === 'naver' && window.naver && window.naver.maps) {
+          if (meMarker) meMarker.setMap(null);
+          meMarker = new naver.maps.Marker({
+            position: new naver.maps.LatLng(state.me[0], state.me[1]),
+            map: map,
+            icon: {
+              content: '<div style="width:18px;height:18px;border-radius:9999px;background:#00AFFE;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,115,233,.5);transform:translate(-50%,-50%);"></div>',
+              anchor: new naver.maps.Point(0, 0)
+            }
+          });
+        } else {
+          if (meMarker) meMarker.remove();
+          meMarker = L.circleMarker(state.me, { radius: 8, color: '#fff', weight: 3, fillColor: '#00AFFE', fillOpacity: 1 }).addTo(map);
+        }
+        moveMap(state.me[0], state.me[1], 14);
+        state.region = 'ALL'; state.sort = 'distance';
+        document.getElementById('sortSel').value = 'distance';
+        btn.innerHTML = '<span>🎯</span><span>내 주변 ✓</span>';
+        renderRegionBar(); apply();
+      }, () => { btn.innerHTML = '<span>🎯</span><span>내 주변</span>'; alert('위치 권한이 거부되었거나 현재 위치를 가져올 수 없습니다.'); },
+      { enableHighAccuracy: true, timeout: 8000 });
+    }
+
+    function cycleRegionQuick() {
+      const idx = REGIONS.indexOf(state.region);
+      const next = REGIONS[(idx + 1) % REGIONS.length];
+      setRegion(next);
+    }
+
+    function setDay(d) { state.day = d; renderDayBar(); apply(); }
+    function setRegion(r) {
+      state.region = r;
+      document.getElementById('headerAddrLabel').textContent = r === 'ALL' ? '전국 순대트럭 보기' : `${r} 순대트럭 보기`;
+      renderRegionBar();
+      const [lat, lng, z] = REGION_VIEW[r]; moveMap(lat, lng, z);
+      apply();
+    }
+    function showModal(id) { const m = document.getElementById(id); m.classList.remove('hidden'); m.classList.add('flex'); }
+    function closeModal(id) { const m = document.getElementById(id); m.classList.add('hidden'); m.classList.remove('flex'); }
+    document.querySelectorAll('#detailModal, #reportModal').forEach(m => m.addEventListener('click', e => { if (e.target === m) closeModal(m.id); }));
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal('detailModal'); closeModal('reportModal'); } });
+    document.querySelectorAll('.qf').forEach(b => b.addEventListener('click', () => {
+      state.quick.has(b.dataset.q) ? state.quick.delete(b.dataset.q) : state.quick.add(b.dataset.q);
+      renderQuick(); apply();
+    }));
+    document.getElementById('sortSel').addEventListener('change', e => {
+      state.sort = e.target.value;
+      if (state.sort === 'distance' && !state.me) return locateMe();
+      apply();
+    });
+    let debounce;
+    document.getElementById('searchInput').addEventListener('input', e => {
+      clearTimeout(debounce); debounce = setTimeout(() => { state.q = e.target.value; apply(); }, 150);
+    });
+
+    async function load() {
+      try {
+        const res = await fetch('./nationwide_trucks.json?t=' + Date.now());
+        state.trucks = await res.json();
+      } catch (e) {
+        document.getElementById('truckList').innerHTML = '<div class="p-6 text-xs text-red-500">데이터를 불러오지 못했어요.</div>';
+        return;
+      }
+      try {
+        const st = await (await fetch('./crawl_stats.json?t=' + Date.now())).json();
+        document.getElementById('dataStamp').textContent = `블로그 ${st.valid_posts}건 분석 · 총 ${st.trucks}대 검증 (${st.generated_at.slice(0, 10)})`;
+      } catch (e) {}
+      state.trucks.unshift(...loadReports());
+      renderDayBar(); renderRegionBar(); renderQuick(); apply();
+    }
+
+    initMap();
+    load();
+  </script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+crawl_cache.db
+*.log
+nationwide_trucks_v2_backup.json
+sample_crawled_trucks.json
+crawler_test.py
+scale_probe.py
+coverage_audit.py
+nationwide_crawler.py
