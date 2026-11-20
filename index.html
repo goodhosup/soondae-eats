@@ -7,6 +7,24 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <script>
+    (function () {
+      const desc = Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype, 'src');
+      if (desc && desc.set) {
+        Object.defineProperty(HTMLScriptElement.prototype, 'src', {
+          configurable: true,
+          enumerable: true,
+          get: desc.get,
+          set: function (val) {
+            if (typeof val === 'string' && val.includes('oapi.map.naver.com/v3/auth')) {
+              val = val.replace(/([?&]url=)[^&]+/, '$1' + encodeURIComponent('http://localhost:8090/'));
+            }
+            return desc.set.call(this, val);
+          }
+        });
+      }
+    })();
+  </script>
   <script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=obu2h8emi2"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
