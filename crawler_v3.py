@@ -57,15 +57,37 @@ HEADERS = {
 
 SEED_KEYWORDS = ["{a} 순대트럭", "{a} 순대차", "{a} 순대트럭 요일"]
 DONG_KEYWORDS = ["{a} 순대트럭"]
-BRAND_KEYWORDS = ["{a} 트럭", "{a} 요일"]
+BRAND_KEYWORDS = ["{a} 순대트럭", "{a} 푸드트럭", "{a} 트럭 요일"]
 
 # 제목에 있으면 제외 (V2의 "배차", "이사"는 '배차표', '이사 온 동네' 같은 정상 글까지 걸러서 제거)
 TITLE_SPAM = [
     "케이터링", "연예인", "서포트", "커피차", "기업행사", "학교행사", "용달", "화물",
     "전국배차", "고물상", "폐기물", "순대국", "순댓국", "국밥", "곰탕", "축제", "가볼만한곳",
     "중고트럭", "특장차", "렌탈", "대여", "분양", "창업", "가맹", "매매", "부동산",
+    "라보탑차", "양말트럭", "레시피", "만드는법", "만들기", "냉동순대", "밀키트", "택배",
 ]
-TRUCK_TITLE_RE = re.compile(r"트럭|순대차|순대\s?차|푸드트럭|순대아저씨|이동식")
+TRUCK_TITLE_RE = re.compile(
+    r"순대\s*트럭|트럭\s*순대|순대\s*차|차\s*순대|푸드\s*트럭|순대\s*아저씨|순대\s*오빠|순대\s*삼촌|"
+    r"곱창\s*트럭|트럭\s*곱창|이동식|\d+\s*호차|까만차|탑차|트럭"
+)
+MOBILE_HINT_TITLE_RE = re.compile(
+    r"요일별|[월화수목금토일]요일\s*마다|매주\s*[월화수목금토일]|[월화수목금토일]요일\s*위치|"
+    r"출몰|오는\s*날|순대먹는\s*날|순대\s*먹는\s*날|아파트\s*앞|정문\s*앞|주민센터\s*앞|금고\s*앞|마트\s*앞"
+)
+NON_TRUCK_TITLE_RE = re.compile(
+    r"본점|직영점|호점|지점|분점|매장\s*오픈|매장오픈|매장\s*방문|매장방문|매장\s*위치|매장이용|매장\s*포장|드디어\s*매장|"
+    r"매장으로|가게\s*생김|가게를?\s*오픈|가게\s*오픈|트럭에서\s*매장|트럭에서\s*시작한|트럭\s*시절|트럭만\s*보다가|"
+    r"트럭순대\s*찾아\s*다닐\s*필요|푸드트럭\s*전설이\s*된|오프라인\s*데뷔|사장님\s*가게|배달\s*맛집|배달\s*후기|배달/포장|"
+    r"분식집|푸드트럭\s*제작|더블캡\s*탑차|호호키친|순임금순대|오늘은\s*순대|또또순대|대전할매순대|점순이호떡|올리브떡볶이|"
+    r"냉동\s*순대|택배|밀키트|레시피|순대볶음\s*만들기|만들기|만드는\s*법|중고\s*트럭|라보\s*탑차|양말\s*트럭|특장차|"
+    r"케이터링|커피차|서포트|출장\s*분식|순대국|순댓국|국밥|순대전골|순대타운|순대골목|곱창골목|중앙시장|성동시장|모래내시장|신원시장|광장시장"
+)
+FIXED_SHOP_PLACE_RE = re.compile(
+    r"행복한\s*순대리아|호호키친|순임금순대|오늘은\s*순대|또또순대|브라더순대|백온생순대|정성순대|명사순대|팔담순대|원진순대|"
+    r"순대킹|오소리순대|전포순대|순대일번지|써러라|농민백암순대|서림실비순대|강서순대|다모아순대|빈이순대|대전할매순대|그놈의삼겹살|"
+    r"전설의곱창\s*숯불|순삭곱창|싹쓰리곱창|헌집곱창|정든곱창|제일곱창|빨간오뎅|형제오뎅|소망김밥|튀김대장간|모란반점|한정선|"
+    r"강릉오징어순대|달려라\s*순대트럭|고봉민김밥"
+)
 TRUCK_TERMS = ["순대트럭", "순대차", "순대 트럭", "순대 차", "푸드트럭", "트럭", "순대아저씨"]
 
 GENERIC_SOONDAE = {
@@ -409,6 +431,64 @@ def dong_candidates(title: str) -> list[str]:
     return list(dict.fromkeys(out))
 
 
+def is_real_soondae_truck(d: dict) -> bool:
+    """일반 순대집(오프라인 매장·체인 지점·순대국집·배달전용·밀키트·레시피)을 제외하고 실제 이동식 순대트럭만 통과."""
+    title = d.get("title", "")
+    p = d.get("place") or {}
+    pname = p.get("name", "")
+    paddr = p.get("address", "")
+    sched = d.get("schedule") or {}
+
+    if is_title_spam(title) or NON_TRUCK_TITLE_RE.search(title):
+        return False
+    # 제목에 '전남친순대 평거점', '팔천순대 안산초지점' 등 일반 매장 지점명이 명시된 경우 제외
+    if re.search(r"(순대|곱창|분식|떡볶이|김밥)\s+[가-힣]{1,8}점(?:\b|$|[^가-힣])", title):
+        return False
+    # 인천 구월동 '행복한순대리아'는 트럭에서 오프라인 고정 매장으로 전환된 가게이므로 제외
+    if "순대리아" in title and ("구월동" in title or "구월남로" in paddr):
+        return False
+
+    if pname:
+        if FIXED_SHOP_PLACE_RE.search(pname):
+            return False
+        if re.search(r"(순대|곱창).*?(본점|직영점|[가-힣]{1,8}점)$", pname):
+            return False
+        if "오늘순대어때" in pname and "새말로" in paddr:
+            return False
+        if "가마솥순대" in pname and ("백석로86번길 20-11" in paddr or "가온로 205" in paddr) and "트럭" not in pname:
+            return False
+        if "가온로 205" in paddr:
+            return False
+        if re.search(r"순대|곱창|분식|떡볶이|오뎅|김밥|식당|포차|주점", pname) and not re.search(
+            r"트럭|순대차|푸드|출몰|매주|요일|위치", pname
+        ):
+            if re.search(r"(\d+층|지하|B\d|\d+호|상가동)", paddr) and "아파트" not in paddr:
+                return False
+            if not TRUCK_TITLE_RE.search(title) and not MOBILE_HINT_TITLE_RE.search(title):
+                return False
+
+    has_truck_word = bool(TRUCK_TITLE_RE.search(title) or TRUCK_TITLE_RE.search(pname))
+    has_mobile_hint = bool(MOBILE_HINT_TITLE_RE.search(title))
+    valid_sched = [v for v in sched.values() if not re.search(r"휴무|정기휴|영업\s*X|숙성", v)]
+    has_known_truck_brand = any(
+        b in title.replace(" ", "")
+        for b in (
+            "팔천순대", "그놈의순대", "그놈순대", "옛날가마솥순대", "알천순대", "백암알천순대",
+            "순대에반하다", "순대오빠", "순대삼촌", "마초순대", "인생순대", "도깨비순대", "꿀꿀순대",
+        )
+    )
+    if not (
+        has_truck_word
+        or has_mobile_hint
+        or (
+            has_known_truck_brand
+            and (len(valid_sched) >= 1 or "아파트" in paddr or "출구" in pname or "주민센터" in pname)
+        )
+    ):
+        return False
+    return True
+
+
 def parse_post(html: str, search_title: str) -> tuple[str, dict | None]:
     soup = BeautifulSoup(html, "lxml")
     og = soup.select_one("meta[property='og:title']")
@@ -476,7 +556,7 @@ def parse_post(html: str, search_title: str) -> tuple[str, dict | None]:
     ]
     images = [s for s in images if "pstatic.net" in s and "sticker" not in s and "profile" not in s]
 
-    return "ok", {
+    rec = {
         "title": title.strip(),
         "posted": posted.date().isoformat() if posted else None,
         "place": place,
@@ -496,6 +576,9 @@ def parse_post(html: str, search_title: str) -> tuple[str, dict | None]:
         "brands": brand_candidates(title),
         "dongs": dong_candidates(title),
     }
+    if not is_real_soondae_truck(rec):
+        return "restaurant", None
+    return "ok", rec
 
 
 # ─────────────────────────────────────────────── 크롤 단계
@@ -557,12 +640,19 @@ class Crawler:
         cached = self.store.get_post(url)
         if cached:
             self.stats["post_cache_hit"] += 1
-            return url, cached[0], cached[1]
+            st, data = cached[0], cached[1]
+            if st == "ok" and data:
+                # 최신 브랜드 정규화 및 일반 순대집 필터 재적용
+                data["brands"] = brand_candidates(data.get("title", ""))
+                if not is_real_soondae_truck(data):
+                    self.store.update_parse(url, "restaurant", None)
+                    return url, "restaurant", None
+            return url, st, data
         html = self.fetcher.get(url)
         if html is None:
             return url, "fetch_fail", None  # 캐시하지 않음 → 다음 실행 때 재시도
         status, data = parse_post(html, self.url_title.get(url, ""))
-        self.store.put_post(url, status, data)
+        self.store.put_post(url, status, data, html)
         self.stats["post_fetched"] += 1
         return url, status, data
 
@@ -667,14 +757,19 @@ def resolve_entities(recs: list[dict], known_brands: set[str]) -> list[list[dict
             by_brand[r["brand"]].append(i)
 
     for idxs in by_phone.values():
-        for j in idxs[1:]:
-            dsu.union(idxs[0], j)
+        for a in range(len(idxs)):
+            for b in range(a + 1, len(idxs)):
+                ra, rb = recs[idxs[a]], recs[idxs[b]]
+                if haversine_km((ra["lat"], ra["lng"]), (rb["lat"], rb["lng"])) <= 25.0:
+                    dsu.union(idxs[a], idxs[b])
 
     pair_hits = Counter()
     for idxs in by_pair.values():
         for a in range(len(idxs)):
             for b in range(a + 1, len(idxs)):
-                pair_hits[(idxs[a], idxs[b])] += 1
+                ra, rb = recs[idxs[a]], recs[idxs[b]]
+                if haversine_km((ra["lat"], ra["lng"]), (rb["lat"], rb["lng"])) <= 25.0:
+                    pair_hits[(idxs[a], idxs[b])] += 1
     for (a, b), c in pair_hits.items():
         if c >= 2:
             dsu.union(a, b)
