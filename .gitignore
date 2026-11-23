@@ -1,6 +1,5 @@
 __pycache__/
 *.pyc
-crawl_cache.db
 *.log
 nationwide_trucks_v2_backup.json
 sample_crawled_trucks.json

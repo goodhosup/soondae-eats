@@ -21,23 +21,15 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Restore SQLite crawl cache (incremental update)
-        uses: actions/cache@v4
-        with:
-          path: crawl_cache.db
-          key: soondae-crawl-cache-${{ github.run_id }}
-          restore-keys: |
-            soondae-crawl-cache-
-
       - name: Install dependencies
-        run: pip install requests beautifulsoup4
+        run: pip install requests beautifulsoup4 lxml
 
       - name: Run nationwide crawler
-        run: python3 crawler_v3.py
+        run: python3 crawler_v3.py --workers 2 --search-ttl 6.5 --max-blocks 4
 
       - name: Commit and push updated truck data
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add nationwide_trucks.json crawl_stats.json
+          git add crawl_cache.db nationwide_trucks.json crawl_stats.json
           git diff --staged --quiet || (git commit -m "chore: auto-update nationwide soondae trucks data" && git push)

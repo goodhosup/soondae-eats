@@ -145,14 +145,14 @@ class Store:
             self.conn.commit()
             self._migrate()
 
-    def get_search(self, query: str, ttl_days: float):
+    def get_search(self, query: str, ttl_days: float | None):
         with self.lock:
             row = self.conn.execute(
                 "SELECT fetched_at, results FROM search_cache WHERE query=?", (query,)
             ).fetchone()
         if not row:
             return None
-        if datetime.fromisoformat(row[0]) < NOW - timedelta(days=ttl_days):
+        if ttl_days is not None and datetime.fromisoformat(row[0]) < NOW - timedelta(days=ttl_days):
             return None
         return json.loads(row[1])
 
@@ -180,7 +180,7 @@ class Store:
         return row[0], (json.loads(row[1]) if row[1] else None), bool(row[2])
 
     def put_post(self, url: str, status: str, data: dict | None, html: str | None = None):
-        blob = zlib.compress(html.encode("utf-8"), 6) if html else None
+        blob = None  # GitHub 저장소 용량 최적화를 위해 원본 HTML BLOB은 기본 저장하지 않음
         with self.lock:
             self.conn.execute(
                 "INSERT OR REPLACE INTO posts(url, fetched_at, status, data, html) VALUES (?,?,?,?,?)",
@@ -213,22 +213,27 @@ class Store:
 
 
 # ─────────────────────────────────────────────── HTTP
+def _make_soup(html: str) -> BeautifulSoup:
+    try:
+        return BeautifulSoup(html, "lxml")
+    except Exception:
+        return BeautifulSoup(html, "html.parser")
+
+
 class Fetcher:
-    """모든 스레드가 공유하는 요청 간격(적응형).
+    """모든 스레드가 공유하는 요청 간격(적응형) + 연속 차단 시 서킷 브레이커."""
 
-    V3 전체 실행에서 3,701건 중 509건(14%)이 차단됨 → 스레드별 랜덤 지연 대신
-    전역 간격을 두고, 차단되면 간격을 늘리고 45초 쉬었다가, 정상 응답이 이어지면 천천히 원래 속도로 복귀.
-    """
-
-    def __init__(self, base_interval: float = 0.7, max_interval: float = 6.0):
+    def __init__(self, base_interval: float = 0.8, max_interval: float = 6.0, max_blocks: int = 8):
         self.base = self.interval = base_interval
         self.max_interval = max_interval
+        self.max_blocks = max_blocks
         self.local = threading.local()
         self.lock = threading.Lock()
         self.next_at = 0.0
         self.cool_until = 0.0
         self.blocked = 0
         self.requests = 0
+        self.tripped = False
 
     def _session(self):
         if not hasattr(self.local, "s"):
@@ -238,24 +243,33 @@ class Fetcher:
 
     def _wait_turn(self):
         with self.lock:
+            if self.tripped:
+                return False
             start = max(time.monotonic(), self.next_at, self.cool_until)
             self.next_at = start + self.interval * random.uniform(0.8, 1.3)
         time.sleep(max(0.0, start - time.monotonic()))
+        return not self.tripped
 
     def _on_block(self):
         with self.lock:
             self.blocked += 1
+            if self.blocked >= self.max_blocks:
+                if not self.tripped:
+                    self.tripped = True
+                    print(f"    ! 차단 {self.blocked}회 누적 → 서킷 브레이커 작동 (기존 캐시 데이터로 안전 폴백)", flush=True)
+                return
             self.interval = min(self.interval * 1.6, self.max_interval)
-            self.cool_until = max(self.cool_until, time.monotonic() + 45)
-            print(f"    ! 차단 감지 → 45초 휴식, 요청 간격 {self.interval:.1f}s", flush=True)
+            self.cool_until = max(self.cool_until, time.monotonic() + 20)
+            print(f"    ! 차단 감지 ({self.blocked}/{self.max_blocks}) → 20초 휴식, 요청 간격 {self.interval:.1f}s", flush=True)
 
     def _on_ok(self):
         with self.lock:
             self.interval = max(self.base, self.interval * 0.97)
 
     def get(self, url: str) -> str | None:
-        for attempt in range(4):
-            self._wait_turn()
+        for attempt in range(3):
+            if not self._wait_turn():
+                return None
             try:
                 r = self._session().get(url, timeout=12)
             except requests.RequestException:
@@ -265,6 +279,8 @@ class Fetcher:
                 self.requests += 1
             if r.status_code in (403, 429) or "비정상적인" in r.text[:3000]:
                 self._on_block()
+                if self.tripped:
+                    return None
                 continue
             self._on_ok()
             return r.text if r.status_code == 200 else None
@@ -490,7 +506,7 @@ def is_real_soondae_truck(d: dict) -> bool:
 
 
 def parse_post(html: str, search_title: str) -> tuple[str, dict | None]:
-    soup = BeautifulSoup(html, "lxml")
+    soup = _make_soup(html)
     og = soup.select_one("meta[property='og:title']")
     title = (og.get("content") if og else "") or search_title
     container = soup.select_one(".se-main-container") or soup.select_one("#viewTypeSelector")
@@ -602,9 +618,13 @@ class Crawler:
                f"&sm=mtb_opt&nso=so%3Ar%2Cp%3A1y")
         html = self.fetcher.get(url)
         if html is None:
+            stale = self.store.get_search(query, None)
+            if stale is not None:
+                self.stats["search_stale_fallback"] += 1
+                return stale
             self.stats["search_fail"] += 1
             return []
-        soup = BeautifulSoup(html, "lxml")
+        soup = _make_soup(html)
         best: dict[str, str] = {}
         for a in soup.select("a[href*='m.blog.naver.com']"):
             m = re.match(r"https?://m\.blog\.naver\.com/([^/?#]+)/(\d+)", a.get("href", ""))
@@ -889,11 +909,12 @@ def main():
     ap.add_argument("--rounds", type=int, default=2, help="스노볼 라운드 수")
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--search-ttl", type=float, default=3.0, help="검색결과 캐시 유효기간(일)")
+    ap.add_argument("--max-blocks", type=int, default=8, help="연속 차단 시 서킷 브레이커 임계치")
     ap.add_argument("--no-geocode", action="store_true")
     args = ap.parse_args()
 
     t0 = time.time()
-    store, fetcher = Store(DB_PATH), Fetcher()
+    store, fetcher = Store(DB_PATH), Fetcher(max_blocks=args.max_blocks)
     crawler = Crawler(store, fetcher, args.workers, args.search_ttl)
 
     seed_jobs = []
