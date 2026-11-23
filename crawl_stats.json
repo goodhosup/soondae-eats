@@ -1,41 +1,43 @@
 {
- "generated_at": "2026-11-20T13:22:47",
- "elapsed_sec": 0,
- "queries": 408,
- "search_fetched": 0,
- "search_cache_hit": 408,
- "search_fail": 0,
- "candidate_posts": 2622,
+ "generated_at": "2026-11-23T23:33:10",
+ "elapsed_sec": 291,
+ "queries": 625,
+ "search_fetched": 302,
+ "search_cache_hit": 8,
+ "search_fail": 196,
+ "candidate_posts": 2931,
  "post_status": {
-  "ok": 823,
-  "spam": 812,
-  "restaurant": 482,
-  "irrelevant": 505
+  "ok": 745,
+  "spam": 279,
+  "fetch_fail": 1220,
+  "restaurant": 427,
+  "irrelevant": 260
  },
- "valid_posts": 823,
- "posts_before_merge": 823,
- "trucks": 411,
- "with_schedule": 89,
- "with_days": 243,
- "with_phone": 49,
+ "valid_posts": 745,
+ "posts_before_merge": 745,
+ "trucks": 370,
+ "with_schedule": 80,
+ "with_days": 221,
+ "with_phone": 44,
  "coord_precision": {
-  "exact": 162,
-  "area": 249
+  "exact": 142,
+  "area": 223,
+  "dong": 5
  },
- "fresh_90d": 127,
+ "fresh_90d": 123,
  "multi_source_trucks": 91,
  "by_region": {
-  "경기": 152,
-  "서울": 77,
-  "부산/울산/경남": 36,
-  "인천": 35,
+  "경기": 121,
+  "서울": 70,
+  "부산/울산/경남": 35,
   "광주/전남": 33,
-  "대구/경북": 25,
-  "대전/세종": 16,
+  "인천": 32,
+  "대구/경북": 27,
   "충청": 14,
-  "전북": 12,
-  "제주": 6,
-  "강원": 5
+  "대전/세종": 14,
+  "전북": 11,
+  "강원": 7,
+  "제주": 6
  },
  "brands": [
   "가마솥순대",
@@ -73,7 +75,7 @@
   "햅삐순대",
   "효자순대"
  ],
- "http_requests": 0,
- "blocked": 0,
- "geocode_lookups": 0
+ "http_requests": 306,
+ "blocked": 4,
+ "geocode_lookups": 12
 }
